@@ -11,6 +11,11 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import matplotlib
+from matplotlib.patches import Rectangle
+import seaborn as sns
+from scipy.spatial.distance import pdist, squareform
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 def get_layer_output(model, layer_name):
     return tf.keras.Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
@@ -45,6 +50,23 @@ def load_superordinate_info():
         all_wnids.update(wnids)
     return superordinate_dict, all_wnids
 
+def compute_pairwise_similarity(activations, metric='cosine'):
+    """
+    Compute pairwise similarity matrix for the given activations.
+    
+    Args:
+        activations (np.ndarray): 2D array of activations (n_samples, n_features)
+        metric (str): Similarity metric to use. Default is 'cosine'.
+    
+    Returns:
+        np.ndarray: 2D array of pairwise similarities
+    """
+    if metric == 'cosine':
+        return cosine_similarity(activations)
+    else:
+        distances = pdist(activations, metric=metric)
+        return 1 - squareform(distances)
+    
 def analyze_layer(layer_name, image_dir, actv_output_dir, wnid_to_description, superordinate_dict, all_wnids, num_images_per_class=50):
     """
     Args:
@@ -109,39 +131,59 @@ def analyze_layer(layer_name, image_dir, actv_output_dir, wnid_to_description, s
     # Perform PCA
     pca = PCA(n_components=2)
     activations_2d = pca.fit_transform(activations)
-    
-    return activations_2d, labels, superordinates
 
-def plot_activations(activations_2d, labels, superordinates, layer_name):
-    plt.figure(figsize=(20, 20))
+    # Compute pairwise similarity
+    similarity_matrix = compute_pairwise_similarity(activations, similarity_metric)
     
-    unique_superordinates = list(set(superordinates))
-    color_map = matplotlib.colormaps["tab20"]
-    colors = {s: color_map(i/len(unique_superordinates)) for i, s in enumerate(unique_superordinates)}
+    return activations_2d, labels, superordinates, similarity_matrix
+
+
+def plot_all_visualizations(layer_results, output_dir):
+    """
+    Plot all visualizations for each layer.
     
-    for superordinate in unique_superordinates:
-        mask = np.array(superordinates) == superordinate  # superordinate-level mask
-        plt.scatter(activations_2d[mask, 0], 
-                    activations_2d[mask, 1], 
-                    c=[colors[superordinate]], 
-                    label=superordinate, 
-                    s=50,
-                    alpha=0.7
-                    )
+    Args:
+        layer_results (dict): Dictionary with layer names as keys and tuples of 
+                              (activations_2d, labels, superordinates, similarity_matrix) as values
+        output_dir (str): Directory to save the output figures
+    """
+    os.makedirs(output_dir, exist_ok=True)
     
-    plt.title(f'VGG16 Activations - {layer_name}', fontsize=16)
-    plt.legend(fontsize=12)
-    plt.tight_layout()
-    plt.savefig(f'figs/vgg16_activations_{layer_name}.png', dpi=150)
-    plt.close()
+    for layer_name, (activations_2d, labels, superordinates, similarity_matrix) in layer_results.items():
+        # Plot activations (unchanged)
+        plt.figure(figsize=(20, 20))
+        unique_superordinates = list(set(superordinates))
+        color_map = matplotlib.colormaps["tab20"]
+        colors = {s: color_map(i/len(unique_superordinates)) for i, s in enumerate(unique_superordinates)}
+        
+        for superordinate in unique_superordinates:
+            mask = np.array(superordinates) == superordinate
+            plt.scatter(activations_2d[mask, 0], 
+                        activations_2d[mask, 1], 
+                        c=[colors[superordinate]], 
+                        label=superordinate, 
+                        s=50,
+                        alpha=0.7
+                        )
+        
+        plt.title(f'VGG16 Activations - {layer_name}', fontsize=16)
+        plt.legend(fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f'vgg16_activations_{layer_name}.png'), dpi=150)
+        plt.close()
+        
+        # Plot similarity matrix with superordinate annotations
+        # TODO:
+
 
 def main():
     wnid_to_description = load_class_info()
     superordinate_dict, all_wnids = load_superordinate_info()
 
+    layer_results = {}
     for layer_name in layers_to_analyze:
         print(f"Analyzing layer: {layer_name}")
-        activations_2d, labels, superordinates = analyze_layer(
+        layer_results[layer_name] = analyze_layer(
             layer_name, 
             image_dir,
             actv_output_dir,
@@ -149,7 +191,10 @@ def main():
             superordinate_dict, 
             all_wnids
         )
-        plot_activations(activations_2d, labels, superordinates, layer_name)
+    
+    # Plot all visualizations at once
+    plot_all_visualizations(layer_results, 'figs')
+
 
 if __name__ == "__main__":
     base_model_name = 'vgg16'
@@ -157,6 +202,7 @@ if __name__ == "__main__":
         base_model = VGG16(weights='imagenet', include_top=True)
     base_model.summary()
     actv_output_dir = f"{base_model_name}_actv"
+    similarity_metric = 'cosine'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
