@@ -172,9 +172,101 @@ def plot_all_visualizations(layer_results, output_dir):
         plt.savefig(os.path.join(output_dir, f'vgg16_activations_{layer_name}.png'), dpi=150)
         plt.close()
         
-        # Plot similarity matrix with superordinate annotations
-        # TODO:
+        # Plot similarity matrix with superordinate and class annotations
+        fig, ax = plt.subplots(figsize=(30, 25))
+        
+        # Sort the similarity matrix and labels based on superordinates and then by class labels
+        sorted_indices = np.lexsort((labels, superordinates))
+        sorted_similarity_matrix = similarity_matrix[sorted_indices][:, sorted_indices]
+        sorted_labels = [labels[i] for i in sorted_indices]
+        sorted_superordinates = [superordinates[i] for i in sorted_indices]
 
+        # Create heatmap
+        im = ax.imshow(sorted_similarity_matrix, cmap='viridis', aspect='auto')
+        plt.colorbar(im, label='Similarity')
+
+        # Prepare for superordinate and class label annotations
+        unique_superordinates = []
+        superordinate_positions = []
+        class_positions = []
+        current_superordinate = None
+        superordinate_start = 0
+        current_class = None
+        class_start = 0
+
+        for i, (superordinate, label) in enumerate(zip(sorted_superordinates, sorted_labels)):
+            if superordinate != current_superordinate:
+                if current_superordinate is not None:
+                    # Add the last class of the previous superordinate
+                    class_positions.append(((class_start + i - 1) / 2, current_class))
+                    
+                    unique_superordinates.append(current_superordinate)
+                    superordinate_positions.append((superordinate_start + i) / 2)
+                current_superordinate = superordinate
+                superordinate_start = i
+                current_class = None
+
+            if label != current_class:
+                if current_class is not None:
+                    class_positions.append(((class_start + i) / 2, current_class))
+                current_class = label
+                class_start = i
+
+        # Add the last superordinate and its last class
+        unique_superordinates.append(current_superordinate)
+        superordinate_positions.append((superordinate_start + len(sorted_superordinates)) / 2)
+        class_positions.append(((class_start + len(sorted_labels)) / 2, current_class))
+
+        # Annotate superordinates (left and bottom)
+        ax.set_xticks(superordinate_positions)
+        ax.set_yticks(superordinate_positions)
+        ax.set_xticklabels(unique_superordinates, rotation=90, fontsize=12, ha='center')
+        ax.set_yticklabels(unique_superordinates, fontsize=12, va='center')
+
+        # Add lines to group superordinates
+        for i in range(1, len(unique_superordinates)):
+            pos = (superordinate_positions[i] + superordinate_positions[i-1]) / 2
+            ax.axhline(y=pos, color='white', linestyle='--', linewidth=1)
+            ax.axvline(x=pos, color='white', linestyle='--', linewidth=1)
+
+        # Annotate class labels (right and top)
+        ax2 = ax.twiny()
+        ax3 = ax.twinx()
+
+        class_positions_values = [pos for pos, _ in class_positions]
+        class_labels = [label for _, label in class_positions]
+
+        ax2.set_xticks(class_positions_values)
+        ax2.set_xticklabels(class_labels, rotation=90, fontsize=6, ha='left')
+        ax2.set_xlim(ax.get_xlim())
+
+        ax3.set_yticks(class_positions_values)
+        ax3.set_yticklabels(class_labels, fontsize=6, va='bottom')
+        ax3.set_ylim(ax.get_ylim())
+
+        # Add lines to group classes
+        for pos, _ in class_positions[1:]:
+            ax.axhline(y=pos, color='gray', linestyle=':', linewidth=0.5)
+            ax.axvline(x=pos, color='gray', linestyle=':', linewidth=0.5)
+
+        plt.title(f'Similarity Matrix ({similarity_metric}) - {layer_name}', fontsize=16)
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(output_dir, 
+            f'{base_model_name}_{similarity_metric}_similarity_matrix_{layer_name}.png'), 
+            dpi=300)
+        plt.close()
+
+        # Debugging: Print the number of classes per superordinate
+        superordinate_class_counts = {}
+        for s, l in zip(sorted_superordinates, sorted_labels):
+            if s not in superordinate_class_counts:
+                superordinate_class_counts[s] = set()
+            superordinate_class_counts[s].add(l)
+        
+        for s, classes in superordinate_class_counts.items():
+            print(f"Superordinate {s} has {len(classes)} classes: {', '.join(classes)}")
+            
 
 def main():
     wnid_to_description = load_class_info()
