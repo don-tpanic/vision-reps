@@ -12,10 +12,6 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import matplotlib
 
-# Load the pre-trained VGG16 model
-base_model = VGG16(weights='imagenet', include_top=True)
-base_model.summary()
-
 def get_layer_output(model, layer_name):
     return tf.keras.Model(inputs=model.input, outputs=model.get_layer(layer_name).output)
 
@@ -34,11 +30,8 @@ def load_class_info():
     wnid_to_description = dict(zip(df['wnid'], df['description']))
     return wnid_to_description
 
-def load_superordinate_info(superordinates):
+def load_superordinate_info():
     """
-    Args:   
-        superordinates (list): list of superordinate categories (str) to analyze
-    
     Returns:
         superordinate_dict (dict): dictionary of superordinate categories to WNIDs
         all_wnids (set): set of all WNIDs in the superordinate categories
@@ -47,16 +40,17 @@ def load_superordinate_info(superordinates):
     all_wnids = set()
     for superordinate in superordinates:
         df_super = pd.read_csv(f'{superordinate}_Imagenet.csv')
-        wnids = set(df_super['wnid'].values[:2])  # Keep to 2 classes per superordinate.
+        wnids = set(df_super['wnid'].values[:num_classes_per_superordinate])
         superordinate_dict[superordinate] = wnids
         all_wnids.update(wnids)
     return superordinate_dict, all_wnids
 
-def analyze_layer(layer_name, image_dir, wnid_to_description, superordinate_dict, all_wnids, num_images_per_class=50):
+def analyze_layer(layer_name, image_dir, actv_output_dir, wnid_to_description, superordinate_dict, all_wnids, num_images_per_class=50):
     """
     Args:
         layer_name (str): name of the layer to analyze
         image_dir (str): directory containing the images
+        actv_output_dir (str): directory to save the activations
         wnid_to_description (dict): dictionary mapping WNID to description
         superordinate_dict (dict): dictionary mapping superordinate categories to WNIDs
         all_wnids (set): set of all WNIDs in the superordinate categories
@@ -67,7 +61,9 @@ def analyze_layer(layer_name, image_dir, wnid_to_description, superordinate_dict
         labels (list): list of labels (class descriptions) corresponding to the activations
         superordinates (list): list of superordinate categories corresponding to the activations
     
-    All outputs have the same length and are aligned by index.
+    Notes:
+        1. All outputs have the same length and are aligned by index.
+        2. Has a check to skip images whose activations have already been saved.
     """
     layer_model = get_layer_output(base_model, layer_name)
     
@@ -84,10 +80,23 @@ def analyze_layer(layer_name, image_dir, wnid_to_description, superordinate_dict
         image_files = os.listdir(class_path)[:num_images_per_class]
         
         for img_file in image_files:
-            print(f"Processing {wnid} | {img_file}")
-            img_path = os.path.join(class_path, img_file)
-            activation = get_activations(layer_model, img_path)
-            activations.append(activation.flatten())
+            activation_dir = os.path.join(actv_output_dir, layer_name, wnid)
+            activation_path = os.path.join(activation_dir, f"{os.path.splitext(img_file)[0]}.npy")
+            
+            if os.path.exists(activation_path):
+                print(f"Loading existing activation for {wnid} | {img_file}")
+                flattened_activation = np.load(activation_path)
+            else:
+                print(f"Processing {wnid} | {img_file}")
+                img_path = os.path.join(class_path, img_file)
+                activation = get_activations(layer_model, img_path)
+                flattened_activation = activation.flatten()
+                
+                # Create the directory if it doesn't exist
+                os.makedirs(activation_dir, exist_ok=True)
+                np.save(activation_path, flattened_activation)
+            
+            activations.append(flattened_activation)
             labels.append(wnid_to_description.get(wnid, wnid))
             
             for superordinate, wnids in superordinate_dict.items():
@@ -112,28 +121,46 @@ def plot_activations(activations_2d, labels, superordinates, layer_name):
     
     for superordinate in unique_superordinates:
         mask = np.array(superordinates) == superordinate  # superordinate-level mask
-        plt.scatter(activations_2d[mask, 0], activations_2d[mask, 1], 
-                    c=[colors[superordinate]], label=superordinate, alpha=0.7)
+        plt.scatter(activations_2d[mask, 0], 
+                    activations_2d[mask, 1], 
+                    c=[colors[superordinate]], 
+                    label=superordinate, 
+                    s=50,
+                    alpha=0.7
+                    )
     
     plt.title(f'VGG16 Activations - {layer_name}', fontsize=16)
     plt.legend(fontsize=12)
     plt.tight_layout()
-    plt.savefig(f'vgg16_activations_{layer_name}.png', dpi=300)
+    plt.savefig(f'figs/vgg16_activations_{layer_name}.png', dpi=150)
     plt.close()
 
 def main():
-    image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
-    superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
-
     wnid_to_description = load_class_info()
-    superordinate_dict, all_wnids = load_superordinate_info(superordinates)
-    
-    layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
-    
+    superordinate_dict, all_wnids = load_superordinate_info()
+
     for layer_name in layers_to_analyze:
         print(f"Analyzing layer: {layer_name}")
-        activations_2d, labels, superordinates = analyze_layer(layer_name, image_dir, wnid_to_description, superordinate_dict, all_wnids)
+        activations_2d, labels, superordinates = analyze_layer(
+            layer_name, 
+            image_dir,
+            actv_output_dir,
+            wnid_to_description, 
+            superordinate_dict, 
+            all_wnids
+        )
         plot_activations(activations_2d, labels, superordinates, layer_name)
 
 if __name__ == "__main__":
+    base_model_name = 'vgg16'
+    if base_model_name == 'vgg16':
+        base_model = VGG16(weights='imagenet', include_top=True)
+    base_model.summary()
+    actv_output_dir = f"{base_model_name}_actv"
+
+    num_classes_per_superordinate = 5
+    image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
+    superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
+    layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
+
     main()
