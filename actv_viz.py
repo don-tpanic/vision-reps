@@ -138,7 +138,7 @@ def analyze_layer(layer_name, image_dir, actv_output_dir, wnid_to_description, s
     return activations_2d, labels, superordinates, similarity_matrix
 
 
-def plot_all_visualizations(layer_results, output_dir):
+def plot_all_visualizations(all_wnids, layer_results, output_dir):
     """
     Plot all visualizations for each layer.
     
@@ -150,7 +150,8 @@ def plot_all_visualizations(layer_results, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     
     for layer_name, (activations_2d, labels, superordinates, similarity_matrix) in layer_results.items():
-        # Plot activations (unchanged)
+        
+        # 1. Plot 2D activations
         plt.figure(figsize=(20, 20))
         unique_superordinates = list(set(superordinates))
         color_map = matplotlib.colormaps["tab20"]
@@ -172,7 +173,7 @@ def plot_all_visualizations(layer_results, output_dir):
         plt.savefig(os.path.join(output_dir, f'vgg16_activations_{layer_name}.png'), dpi=150)
         plt.close()
         
-        # Plot similarity matrix with superordinate and class annotations
+        # 2. Plot similarity matrix with superordinate and class annotations
         fig, ax = plt.subplots(figsize=(30, 25))
         
         # Sort the similarity matrix and labels based on superordinates and then by class labels
@@ -257,6 +258,67 @@ def plot_all_visualizations(layer_results, output_dir):
             dpi=300)
         plt.close()
 
+        # 3. Activation distribution analysis
+        plt.figure(figsize=(10, 6))
+        
+        # Get the raw activations from the layer_model
+        raw_activations = get_raw_activations(all_wnids, layer_name)
+        print(f"Loaded raw activations for {raw_activations.shape[0]} images")
+        print(f"raw_activations.shape: {raw_activations.shape}")
+        
+        # Calculate zero vs non-zero statistics
+        total_activations = raw_activations.size
+        zero_activations = np.sum(raw_activations == 0)
+        nonzero_activations = total_activations - zero_activations
+        
+        zero_percentage = (zero_activations / total_activations) * 100
+        nonzero_percentage = (nonzero_activations / total_activations) * 100
+        
+        # Create bar plot
+        bars = plt.bar(['Zero Activations', 'Non-zero Activations'], 
+                    [zero_percentage, nonzero_percentage],
+                    color=['#ff9999', '#66b3ff'])
+        
+        # Add percentage labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{height:.1f}%',
+                    ha='center', va='bottom', fontsize=12)
+        
+        # Add title and labels
+        plt.title(f'Activation Distribution Analysis - {layer_name}', fontsize=14, pad=20)
+        plt.ylabel('Percentage of Total Activations (%)', fontsize=12)
+        
+        # Add statistical summary in top right corner
+        summary_stats = {
+            'Total Activations': f"{total_activations:,}",
+            'Zero Activations': f"{zero_activations:,}",
+            'Non-zero Activations': f"{nonzero_activations:,}",
+            'Mean (non-zero)': f"{np.mean(raw_activations[raw_activations != 0]):.3f}",
+            'Std (non-zero)': f"{np.std(raw_activations[raw_activations != 0]):.3f}"
+        }
+        
+        stats_text = '\n'.join([f'{k}: {v}' for k, v in summary_stats.items()])
+        plt.text(0.98, 0.98, stats_text,
+                transform=plt.gca().transAxes,
+                verticalalignment='top',
+                horizontalalignment='right',
+                fontsize=10,
+                fontfamily='monospace',
+                bbox=dict(facecolor='white', alpha=0.8,
+                        edgecolor='gray', boxstyle='round,pad=0.5'))
+        
+        # Customize the plot
+        plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.ylim(0, max(zero_percentage, nonzero_percentage) * 1.15)  # Add 15% padding
+        
+        # Save and close
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f'activation_distribution_{layer_name}.png'),
+                    dpi=300, bbox_inches='tight')
+        plt.close()
+
         # Debugging: Print the number of classes per superordinate
         superordinate_class_counts = {}
         for s, l in zip(sorted_superordinates, sorted_labels):
@@ -267,6 +329,32 @@ def plot_all_visualizations(layer_results, output_dir):
         for s, classes in superordinate_class_counts.items():
             print(f"Superordinate {s} has {len(classes)} classes: {', '.join(classes)}")
             
+def get_raw_activations(all_wnids, layer_name):
+    """
+    Helper function to get raw activations for a given layer from saved files.
+    
+    Args:
+        layer_name (str): Name of the layer
+    
+    Returns:
+        np.ndarray: Array of activations for all images
+    """
+    all_activations = []
+    for wnid in all_wnids:
+        print(f"Processing raw activations for {wnid}")
+        activation_dir = os.path.join(actv_output_dir, layer_name, wnid)
+        print(f"  activation_dir: {activation_dir}")
+        if not os.path.isdir(activation_dir):
+            continue
+            
+        for activation_file in os.listdir(activation_dir):
+            print(f"  activation_file: {activation_file}")
+            if activation_file.endswith('.npy'):
+                activation_path = os.path.join(activation_dir, activation_file)
+                activation = np.load(activation_path)
+                all_activations.append(activation)
+    
+    return np.array(all_activations)
 
 def main():
     wnid_to_description = load_class_info()
@@ -285,7 +373,7 @@ def main():
         )
     
     # Plot all visualizations at once
-    plot_all_visualizations(layer_results, 'figs')
+    plot_all_visualizations(all_wnids, layer_results, 'figs')
 
 
 if __name__ == "__main__":
