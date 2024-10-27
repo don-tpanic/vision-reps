@@ -265,7 +265,7 @@ def plot_activation_distribution(raw_activations, layer_name, output_dir):
     plt.ylim(0, max(zero_percentage, nonzero_percentage) * 1.15)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'activation_distribution_{layer_name}.png'),
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_activation_distribution_{layer_name}.png'),
                 dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -467,13 +467,14 @@ def analyze_superordinate_similarities(similarity_matrix, superordinates, labels
         'statistical_tests': statistical_tests
     }
 
-def plot_superordinate_similarities(analysis_results, layer_name, output_dir):
+def plot_superordinate_similarities(analysis_results, layer_name, similarity_metric, output_dir):
     """
     Create visualizations for superordinate similarity analysis.
     
     Args:
         analysis_results (dict): Results from analyze_superordinate_similarities
         layer_name (str): Name of the layer being analyzed
+        similarity_metric (str): Similarity metric used
         output_dir (str): Directory to save plots
     """
     # 1. Plot within-superordinate similarities
@@ -504,7 +505,7 @@ def plot_superordinate_similarities(analysis_results, layer_name, output_dir):
             bbox=dict(facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'within_similarities_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_within_similarities_{layer_name}.png'))
     plt.close()
     
     # 2. Plot between-superordinate similarities matrix
@@ -544,7 +545,7 @@ def plot_superordinate_similarities(analysis_results, layer_name, output_dir):
             transform=plt.gca().transAxes)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'between_similarities_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_between_similarities_{layer_name}.png'))
     plt.close()
     
     # 3. Plot distribution comparison
@@ -577,7 +578,7 @@ def plot_superordinate_similarities(analysis_results, layer_name, output_dir):
             bbox=dict(facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'similarity_distributions_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_similarity_distributions_{layer_name}.png'))
     plt.close()
 
 def plot_all_visualizations(all_wnids, layer_results, output_dir):
@@ -608,7 +609,7 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
 
         # 4. Plot superordinate similarity analysis
         analysis_results = analyze_superordinate_similarities(similarity_matrix, superordinates, labels)
-        plot_superordinate_similarities(analysis_results, layer_name, output_dir)
+        plot_superordinate_similarities(analysis_results, layer_name, similarity_metric, output_dir)
 
 def print_superordinate_class_counts(superordinates, labels):
     """
