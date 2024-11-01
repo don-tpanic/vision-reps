@@ -1,6 +1,6 @@
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy as np
@@ -10,7 +10,7 @@ import matplotlib
 import seaborn as sns
 import scipy
 
-from models import CNNAnalyzer
+from models import CNNAnalyzer, ViTAnalyzer
 
 def load_class_info():
     df = pd.read_csv('categories/ranked_Imagenet.csv')
@@ -45,7 +45,7 @@ def get_raw_activations(all_wnids, layer_name):
     all_activations = []
     for wnid in all_wnids:
         print(f"Processing raw activations for {wnid}")
-        activation_dir = os.path.join(actv_output_dir, layer_name, wnid)
+        activation_dir = os.path.join(actv_output_dir, str(layer_name), wnid)
         print(f"  activation_dir: {activation_dir}")
         if not os.path.isdir(activation_dir):
             continue
@@ -77,10 +77,10 @@ def plot_2d_activations(activations_2d, superordinates, layer_name, output_dir):
                     alpha=0.7
                     )
     
-    plt.title(f'VGG16 Activations - {layer_name}', fontsize=16)
+    plt.title(f'{base_model_name} Activations - {layer_name}', fontsize=16)
     plt.legend(fontsize=12)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'vgg16_activations_{layer_name}.png'), dpi=150)
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_activations_{layer_name}.png'), dpi=150)
     plt.close()
 
 def plot_similarity_matrix(similarity_matrix, labels, superordinates, layer_name, base_model_name, similarity_metric, output_dir):
@@ -648,9 +648,9 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
         plot_similarity_matrix(similarity_matrix, labels, superordinates, 
                              layer_name, base_model_name, similarity_metric, output_dir)
         
-        # 3. Plot activation distribution
-        raw_activations = get_raw_activations(all_wnids, layer_name)
-        plot_activation_distribution(raw_activations, layer_name, output_dir)
+        # # 3. Plot activation distribution
+        # raw_activations = get_raw_activations(all_wnids, layer_name)
+        # plot_activation_distribution(raw_activations, layer_name, output_dir)
         
         # 4. Plot superordinate similarity analysis
         analysis_results = analyze_superordinate_similarities(similarity_matrix, superordinates, labels)
@@ -662,9 +662,13 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
 
 
 def main():
-    # Initialize the CNN analyzer
-    analyzer = CNNAnalyzer(model_name=base_model_name)
-    analyzer.get_model_summary()
+    if not "vit" in base_model_name:
+        # Initialize the CNN analyzer
+        analyzer = CNNAnalyzer(model_name=base_model_name)
+    else:
+        # Initialize the ViT analyzer
+        analyzer = ViTAnalyzer(model_name=base_model_name)
+    analyzer.get_model_info()
     
     wnid_to_description = load_class_info()
     superordinate_dict, all_wnids = load_superordinate_info()
@@ -686,13 +690,13 @@ def main():
 
 if __name__ == "__main__":
     # Configuration
-    base_model_name = 'vgg16'
+    base_model_name = 'dino-vitb16'
     actv_output_dir = f"{base_model_name}_actv"
     similarity_metric = 'cosine'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
     unique_superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
-    layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
+    layers_to_analyze = [6, 9, 12] # ViT 13 hidden outputs final layer untrained.
 
     main()
