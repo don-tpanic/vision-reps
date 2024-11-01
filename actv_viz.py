@@ -13,7 +13,7 @@ import scipy
 from models import CNNAnalyzer
 
 def load_class_info():
-    df = pd.read_csv('ranked_Imagenet.csv')
+    df = pd.read_csv('categories/ranked_Imagenet.csv')
     wnid_to_description = dict(zip(df['wnid'], df['description']))
     return wnid_to_description
 
@@ -26,7 +26,7 @@ def load_superordinate_info():
     superordinate_dict = {}
     all_wnids = set()
     for superordinate in unique_superordinates:
-        df_super = pd.read_csv(f'{superordinate}_Imagenet.csv')
+        df_super = pd.read_csv(f'categories/{superordinate}_Imagenet.csv')
         wnids = set(df_super['wnid'].values[:num_classes_per_superordinate])
         superordinate_dict[superordinate] = wnids
         all_wnids.update(wnids)
