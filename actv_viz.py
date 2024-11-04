@@ -83,21 +83,21 @@ def plot_2d_activations(activations_2d, superordinates, layer_name, output_dir):
     plt.savefig(os.path.join(output_dir, f'{base_model_name}_activations_{layer_name}.png'), dpi=150)
     plt.close()
 
-def plot_similarity_matrix(similarity_matrix, labels, superordinates, layer_name, base_model_name, similarity_metric, output_dir):
+def plot_dissimilarity_matrix(dissimilarity_matrix, labels, superordinates, layer_name, base_model_name, dissimilarity_metric, output_dir):
     """
-    Plot similarity matrix with superordinate and class annotations.
+    Plot dissimilarity matrix with superordinate and class annotations.
     """
     fig, ax = plt.subplots(figsize=(30, 25))
     
-    # Sort the similarity matrix and labels based on superordinates and then by class labels
+    # Sort the dissimilarity matrix and labels based on superordinates and then by class labels
     sorted_indices = np.lexsort((labels, superordinates))
-    sorted_similarity_matrix = similarity_matrix[sorted_indices][:, sorted_indices]
+    sorted_dissimilarity_matrix = dissimilarity_matrix[sorted_indices][:, sorted_indices]
     sorted_labels = [labels[i] for i in sorted_indices]
     sorted_superordinates = [superordinates[i] for i in sorted_indices]
 
     # Create heatmap
-    im = ax.imshow(sorted_similarity_matrix, cmap='viridis', aspect='auto')
-    plt.colorbar(im, label='Similarity')
+    im = ax.imshow(sorted_dissimilarity_matrix, cmap='viridis', aspect='auto')
+    plt.colorbar(im, label='dissimilarity')
 
     # Get superordinate and class positions
     superordinate_positions, unique_superordinates, class_positions = get_annotation_positions(
@@ -115,11 +115,11 @@ def plot_similarity_matrix(similarity_matrix, labels, superordinates, layer_name
     # Add class group lines
     add_class_lines(ax, class_positions)
 
-    plt.title(f'Similarity Matrix ({similarity_metric}) - {layer_name}', fontsize=16)
+    plt.title(f'dissimilarity Matrix ({dissimilarity_metric}) - {layer_name}', fontsize=16)
     plt.tight_layout()
     plt.savefig(
         os.path.join(output_dir, 
-        f'{base_model_name}_{similarity_metric}_similarity_matrix_{layer_name}.png'), 
+        f'{base_model_name}_{dissimilarity_metric}_dissimilarity_matrix_{layer_name}.png'), 
         dpi=300)
     plt.close()
 
@@ -273,12 +273,12 @@ def add_statistical_summary(plt, total_activations, zero_activations, nonzero_ac
             bbox=dict(facecolor='white', alpha=0.8,
                     edgecolor='gray', boxstyle='round,pad=0.5'))
 
-def analyze_superordinate_similarities(similarity_matrix, superordinates, labels):
+def analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, labels):
     """
-    Analyze similarities within and between superordinates.
+    Analyze dissimilarities within and between superordinates.
     
     Args:
-        similarity_matrix (np.ndarray): The similarity matrix
+        dissimilarity_matrix (np.ndarray): The dissimilarity matrix
         superordinates (list): List of superordinate categories for each sample
         labels (list): List of class labels for each sample
         
@@ -293,34 +293,34 @@ def analyze_superordinate_similarities(similarity_matrix, superordinates, labels
         for sup in unique_superordinates
     }
     
-    # Calculate within-superordinate similarities
-    within_similarities = {}
-    within_similarities_distributions = {}
+    # Calculate within-superordinate dissimilarities
+    within_dissimilarities = {}
+    within_dissimilarities_distributions = {}
     for sup in unique_superordinates:
         mask = superordinate_masks[sup]
-        # Get upper triangle of similarity matrix for this superordinate
-        within_sim = similarity_matrix[np.ix_(mask, mask)]
+        # Get upper triangle of dissimilarity matrix for this superordinate
+        within_sim = dissimilarity_matrix[np.ix_(mask, mask)]
         # Extract upper triangle (excluding diagonal)
         upper_tri = within_sim[np.triu_indices_from(within_sim, k=1)]
-        within_similarities[sup] = np.mean(upper_tri)
-        within_similarities_distributions[sup] = upper_tri
+        within_dissimilarities[sup] = np.mean(upper_tri)
+        within_dissimilarities_distributions[sup] = upper_tri
     
-    # Calculate between-superordinate similarities
-    between_similarities = {}
-    between_similarities_distributions = {}
+    # Calculate between-superordinate dissimilarities
+    between_dissimilarities = {}
+    between_dissimilarities_distributions = {}
     for i, sup1 in enumerate(unique_superordinates):
         for j, sup2 in enumerate(unique_superordinates[i+1:], i+1):
             mask1 = superordinate_masks[sup1]
             mask2 = superordinate_masks[sup2]
-            between_sim = similarity_matrix[np.ix_(mask1, mask2)]
-            between_similarities[(sup1, sup2)] = np.mean(between_sim)
-            between_similarities_distributions[(sup1, sup2)] = between_sim.flatten()
+            between_sim = dissimilarity_matrix[np.ix_(mask1, mask2)]
+            between_dissimilarities[(sup1, sup2)] = np.mean(between_sim)
+            between_dissimilarities_distributions[(sup1, sup2)] = between_sim.flatten()
     
     # Perform statistical tests
     statistical_tests = {}
     
-    # 1. ANOVA test for differences among within-superordinate similarities
-    within_groups = list(within_similarities_distributions.values())
+    # 1. ANOVA test for differences among within-superordinate dissimilarities
+    within_groups = list(within_dissimilarities_distributions.values())
     f_stat, p_value = scipy.stats.f_oneway(*within_groups)
     statistical_tests['within_anova'] = {
         'f_statistic': f_stat,
@@ -333,8 +333,8 @@ def analyze_superordinate_similarities(similarity_matrix, superordinates, labels
     for i, sup1 in enumerate(unique_superordinates):
         for sup2 in unique_superordinates[i+1:]:
             t_stat, p_val = scipy.stats.ttest_ind(
-                within_similarities_distributions[sup1],
-                within_similarities_distributions[sup2]
+                within_dissimilarities_distributions[sup1],
+                within_dissimilarities_distributions[sup2]
             )
             within_ttests[(sup1, sup2)] = {
                 't_statistic': t_stat,
@@ -342,9 +342,9 @@ def analyze_superordinate_similarities(similarity_matrix, superordinates, labels
             }
     statistical_tests['within_ttests'] = within_ttests
     
-    # 3. Compare within vs between similarities
-    all_within = np.concatenate(list(within_similarities_distributions.values()))
-    all_between = np.concatenate(list(between_similarities_distributions.values()))
+    # 3. Compare within vs between dissimilarities
+    all_within = np.concatenate(list(within_dissimilarities_distributions.values()))
+    all_between = np.concatenate(list(between_dissimilarities_distributions.values()))
     t_stat, p_val = scipy.stats.ttest_ind(all_within, all_between)
     statistical_tests['within_vs_between'] = {
         't_statistic': t_stat,
@@ -352,26 +352,26 @@ def analyze_superordinate_similarities(similarity_matrix, superordinates, labels
     }
     
     return {
-        'within_similarities': within_similarities,
-        'between_similarities': between_similarities,
-        'within_distributions': within_similarities_distributions,
-        'between_distributions': between_similarities_distributions,
+        'within_dissimilarities': within_dissimilarities,
+        'between_dissimilarities': between_dissimilarities,
+        'within_distributions': within_dissimilarities_distributions,
+        'between_distributions': between_dissimilarities_distributions,
         'statistical_tests': statistical_tests
     }
 
-def plot_superordinate_similarities(analysis_results, layer_name, similarity_metric, output_dir):
+def plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir):
     """
-    Create visualizations for superordinate similarity analysis.
+    Create visualizations for superordinate dissimilarity analysis.
     
     Args:
-        analysis_results (dict): Results from analyze_superordinate_similarities
+        analysis_results (dict): Results from analyze_superordinate_dissimilarities
         layer_name (str): Name of the layer being analyzed
-        similarity_metric (str): Similarity metric used
+        dissimilarity_metric (str): dissimilarity metric used
         output_dir (str): Directory to save plots
     """
-    # 1. Plot within-superordinate similarities
+    # 1. Plot within-superordinate dissimilarities
     plt.figure(figsize=(12, 6))
-    within_sims = analysis_results['within_similarities']
+    within_sims = analysis_results['within_dissimilarities']
     
     # Bar plot
     bars = plt.bar(range(len(within_sims)), 
@@ -384,8 +384,8 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
     plt.errorbar(range(len(within_sims)), list(within_sims.values()),
                 yerr=errors, fmt='none', color='black', capsize=5)
     
-    plt.title(f'Within-Superordinate Similarities - {layer_name}')
-    plt.ylabel('Average Similarity')
+    plt.title(f'Within-Superordinate dissimilarities - {layer_name}')
+    plt.ylabel('Average dissimilarity')
     plt.xticks(rotation=45)
     
     # Add significance annotations
@@ -397,24 +397,24 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
             bbox=dict(facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_within_similarities_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{dissimilarity_metric}_within_dissimilarities_{layer_name}.png'))
     plt.close()
     
-    # 2. Plot between-superordinate similarities matrix
+    # 2. Plot between-superordinate dissimilarities matrix
     plt.figure(figsize=(10, 8))
     n_superordinates = len(unique_superordinates)
     between_matrix = np.zeros((n_superordinates, n_superordinates))
     
     # Fill the matrix
-    for (sup1, sup2), sim in analysis_results['between_similarities'].items():
+    for (sup1, sup2), sim in analysis_results['between_dissimilarities'].items():
         i = unique_superordinates.index(sup1)
         j = unique_superordinates.index(sup2)
         between_matrix[i, j] = sim
         between_matrix[j, i] = sim  # Symmetric
     
-    # Fill diagonal with within-similarities
+    # Fill diagonal with within-dissimilarities
     for i, sup in enumerate(unique_superordinates):
-        between_matrix[i, i] = analysis_results['within_similarities'][sup]
+        between_matrix[i, i] = analysis_results['within_dissimilarities'][sup]
     
     # Create heatmap
     sns.heatmap(between_matrix,
@@ -424,7 +424,7 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
                 fmt='.2f',
                 cmap='viridis')
     
-    plt.title(f'Superordinate Similarity Matrix - {layer_name}')
+    plt.title(f'Superordinate dissimilarity Matrix - {layer_name}')
     plt.xticks(rotation=45)
     plt.yticks(rotation=0)
     
@@ -435,7 +435,7 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
             transform=plt.gca().transAxes)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_between_similarities_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{dissimilarity_metric}_between_dissimilarities_{layer_name}.png'))
     plt.close()
     
     # 3. Plot distribution comparison
@@ -455,9 +455,9 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
         pc.set_facecolor('#D43F3A')
         pc.set_alpha(0.7)
     
-    plt.title(f'Distribution of Within vs Between Similarities - {layer_name}')
+    plt.title(f'Distribution of Within vs Between dissimilarities - {layer_name}')
     plt.xticks(positions, ['Within\nSuperordinate', 'Between\nSuperordinates'])
-    plt.ylabel('Similarity')
+    plt.ylabel('dissimilarity')
     
     # Add test statistics
     test_result = analysis_results['statistical_tests']['within_vs_between']
@@ -468,15 +468,15 @@ def plot_superordinate_similarities(analysis_results, layer_name, similarity_met
             bbox=dict(facecolor='white', alpha=0.8))
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{similarity_metric}_similarity_distributions_{layer_name}.png'))
+    plt.savefig(os.path.join(output_dir, f'{base_model_name}_{dissimilarity_metric}_dissimilarity_distributions_{layer_name}.png'))
     plt.close()
 
-def analyze_animacy_similarities(similarity_matrix, superordinates, labels):
+def analyze_animacy_dissimilarities(dissimilarity_matrix, superordinates, labels):
     """
-    Analyze similarities within and between animate and inanimate categories.
+    Analyze dissimilarities within and between animate and inanimate categories.
     
     Args:
-        similarity_matrix (np.ndarray): The similarity matrix
+        dissimilarity_matrix (np.ndarray): The dissimilarity matrix
         superordinates (list): List of superordinate categories for each sample
         labels (list): List of class labels for each sample
         
@@ -503,69 +503,69 @@ def analyze_animacy_similarities(similarity_matrix, superordinates, labels):
         for category in ["animal", "nonimal"]
     }
     
-    # Calculate within-animacy similarities
-    within_similarities = {}
-    within_similarities_distributions = {}
+    # Calculate within-animacy dissimilarities
+    within_dissimilarities = {}
+    within_dissimilarities_distributions = {}
     for category in ["animal", "nonimal"]:
         mask = animacy_masks[category]
-        within_sim = similarity_matrix[np.ix_(mask, mask)]
+        within_sim = dissimilarity_matrix[np.ix_(mask, mask)]
         # Extract upper triangle (excluding diagonal)
         upper_tri = within_sim[np.triu_indices_from(within_sim, k=1)]
-        within_similarities[category] = np.mean(upper_tri)
-        within_similarities_distributions[category] = upper_tri
+        within_dissimilarities[category] = np.mean(upper_tri)
+        within_dissimilarities_distributions[category] = upper_tri
     
-    # Calculate between-animacy similarities
+    # Calculate between-animacy dissimilarities
     mask_animal = animacy_masks["animal"]
     mask_nonimal = animacy_masks["nonimal"]
-    between_sim = similarity_matrix[np.ix_(mask_animal, mask_nonimal)]
-    between_similarities = np.mean(between_sim)
-    between_similarities_distribution = between_sim.flatten()
+    between_sim = dissimilarity_matrix[np.ix_(mask_animal, mask_nonimal)]
+    between_dissimilarities = np.mean(between_sim)
+    between_dissimilarities_distribution = between_sim.flatten()
     
     # Perform statistical tests
     statistical_tests = {}
     
-    # 1. Compare animal vs non-animal within-category similarities
+    # 1. Compare animal vs non-animal within-category dissimilarities
     t_stat, p_val = scipy.stats.ttest_ind(
-        within_similarities_distributions["animal"],
-        within_similarities_distributions["nonimal"]
+        within_dissimilarities_distributions["animal"],
+        within_dissimilarities_distributions["nonimal"]
     )
     statistical_tests['within_comparison'] = {
         't_statistic': t_stat,
         'p_value': p_val
     }
     
-    # 2. Compare within vs between similarities
+    # 2. Compare within vs between dissimilarities
     all_within = np.concatenate([
-        within_similarities_distributions["animal"],
-        within_similarities_distributions["nonimal"]
+        within_dissimilarities_distributions["animal"],
+        within_dissimilarities_distributions["nonimal"]
     ])
-    t_stat, p_val = scipy.stats.ttest_ind(all_within, between_similarities_distribution)
+    t_stat, p_val = scipy.stats.ttest_ind(all_within, between_dissimilarities_distribution)
     statistical_tests['within_vs_between'] = {
         't_statistic': t_stat,
         'p_value': p_val
     }
     
     return {
-        'within_similarities': within_similarities,
-        'between_similarities': between_similarities,
-        'within_distributions': within_similarities_distributions,
-        'between_distribution': between_similarities_distribution,
+        'within_dissimilarities': within_dissimilarities,
+        'between_dissimilarities': between_dissimilarities,
+        'within_distributions': within_dissimilarities_distributions,
+        'between_distribution': between_dissimilarities_distribution,
         'statistical_tests': statistical_tests
     }
 
-def plot_animacy_similarities(analysis_results, layer_name, similarity_metric, output_dir):
+def plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir):
     """
-    Create visualizations for animacy-based similarity analysis.
+    Create visualizations for animacy-based dissimilarity analysis.
     
     Args:
-        analysis_results (dict): Results from analyze_animacy_similarities
+        analysis_results (dict): Results from analyze_animacy_dissimilarities
         layer_name (str): Name of the layer being analyzed
-        similarity_metric (str): Similarity metric used
+        dissimilarity_metric (str): dissimilarity metric used
         output_dir (str): Directory to save plots
     """
-    # 1. Plot within-animacy similarities
+    # 1. Plot within-animacy dissimilarities
     plt.figure(figsize=(10, 6))
-    within_sims = analysis_results['within_similarities']
+    within_sims = analysis_results['within_dissimilarities']
     
     # Bar plot
     bars = plt.bar(range(len(within_sims)), 
@@ -578,8 +578,8 @@ def plot_animacy_similarities(analysis_results, layer_name, similarity_metric, o
     plt.errorbar(range(len(within_sims)), list(within_sims.values()),
                 yerr=errors, fmt='none', color='black', capsize=5)
     
-    plt.title(f'Within-Animacy Category Similarities - {layer_name}')
-    plt.ylabel('Average Similarity')
+    plt.title(f'Within-Animacy Category dissimilarities - {layer_name}')
+    plt.ylabel('Average dissimilarity')
     
     # Add significance annotations
     test_result = analysis_results['statistical_tests']['within_comparison']
@@ -591,7 +591,7 @@ def plot_animacy_similarities(analysis_results, layer_name, similarity_metric, o
     
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 
-                f'{base_model_name}_{similarity_metric}_within_animacy_similarities_{layer_name}.png'))
+                f'{base_model_name}_{dissimilarity_metric}_within_animacy_dissimilarities_{layer_name}.png'))
     plt.close()
     
     # 2. Plot distribution comparison
@@ -612,9 +612,9 @@ def plot_animacy_similarities(analysis_results, layer_name, similarity_metric, o
         pc.set_facecolor(colors[i])
         pc.set_alpha(0.7)
     
-    plt.title(f'Distribution of Within and Between Animacy Similarities - {layer_name}')
+    plt.title(f'Distribution of Within and Between Animacy dissimilarities - {layer_name}')
     plt.xticks(positions, ['Within\nAnimal', 'Within\nNon-animal', 'Between\nCategories'])
-    plt.ylabel('Similarity')
+    plt.ylabel('dissimilarity')
     
     # Add test statistics
     test_result = analysis_results['statistical_tests']['within_vs_between']
@@ -626,7 +626,7 @@ def plot_animacy_similarities(analysis_results, layer_name, similarity_metric, o
     
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 
-                f'{base_model_name}_{similarity_metric}_animacy_similarity_distributions_{layer_name}.png'))
+                f'{base_model_name}_{dissimilarity_metric}_animacy_dissimilarity_distributions_{layer_name}.png'))
     plt.close()
 
 def plot_all_visualizations(all_wnids, layer_results, output_dir):
@@ -635,30 +635,30 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
     
     Args:
         layer_results (dict): Dictionary with layer names as keys and tuples of 
-                          (activations_2d, labels, superordinates, similarity_matrix) as values
+                          (activations_2d, labels, superordinates, dissimilarity_matrix) as values
         output_dir (str): Directory to save the output figures
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    for layer_name, (activations_2d, labels, superordinates, similarity_matrix) in layer_results.items():
+    for layer_name, (activations_2d, labels, superordinates, dissimilarity_matrix) in layer_results.items():
         # 1. Plot 2D activations
         plot_2d_activations(activations_2d, superordinates, layer_name, output_dir)
         
-        # 2. Plot similarity matrix
-        plot_similarity_matrix(similarity_matrix, labels, superordinates, 
-                             layer_name, base_model_name, similarity_metric, output_dir)
+        # 2. Plot dissimilarity matrix
+        plot_dissimilarity_matrix(dissimilarity_matrix, labels, superordinates, 
+                             layer_name, base_model_name, dissimilarity_metric, output_dir)
         
         # # 3. Plot activation distribution
         # raw_activations = get_raw_activations(all_wnids, layer_name)
         # plot_activation_distribution(raw_activations, layer_name, output_dir)
         
-        # 4. Plot superordinate similarity analysis
-        analysis_results = analyze_superordinate_similarities(similarity_matrix, superordinates, labels)
-        plot_superordinate_similarities(analysis_results, layer_name, similarity_metric, output_dir)
+        # 4. Plot superordinate dissimilarity analysis
+        analysis_results = analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, labels)
+        plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir)
 
-        # 5. Plot animacy similarity analysis
-        analysis_results = analyze_animacy_similarities(similarity_matrix, superordinates, labels)
-        plot_animacy_similarities(analysis_results, layer_name, similarity_metric, output_dir)
+        # 5. Plot animacy dissimilarity analysis
+        analysis_results = analyze_animacy_dissimilarities(dissimilarity_matrix, superordinates, labels)
+        plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir)
 
 
 def main():
@@ -690,13 +690,13 @@ def main():
 
 if __name__ == "__main__":
     # Configuration
-    base_model_name = 'dino-vitb16'
+    base_model_name = 'vit-base-patch16-224'  # vit-base-patch16-224 | dino-vitb16 | vgg16
     actv_output_dir = f"{base_model_name}_actv"
-    similarity_metric = 'cosine'
+    dissimilarity_metric = 'cosine'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
     unique_superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
-    layers_to_analyze = [6, 9, 12] # ViT 13 hidden outputs final layer untrained.
+    layers_to_analyze = ["6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
 
     main()

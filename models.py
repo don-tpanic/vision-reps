@@ -13,7 +13,7 @@ import torch
 from torchvision import transforms
 from transformers import ViTModel, ViTImageProcessor
 
-from similarity_computers import compute_pairwise_similarity
+from dissimilarity_computers import compute_pairwise_dissimilarity
 
 
 class CNNAnalyzer:
@@ -100,7 +100,7 @@ class CNNAnalyzer:
             num_images_per_class (int): Number of images to analyze per class
             
         Returns:
-            tuple: (activations_2d, labels, superordinates, similarity_matrix)
+            tuple: (activations_2d, labels, superordinates, dissimilarity_matrix)
         """
         layer_model = self.get_layer_output_model(layer_name)
         
@@ -146,10 +146,10 @@ class CNNAnalyzer:
         pca = PCA(n_components=2)
         activations_2d = pca.fit_transform(activations)
 
-        # Compute similarity matrix
-        similarity_matrix = compute_pairwise_similarity(activations)
+        # Compute dissimilarity matrix
+        dissimilarity_matrix = compute_pairwise_dissimilarity(activations)
         
-        return activations_2d, labels, superordinates, similarity_matrix
+        return activations_2d, labels, superordinates, dissimilarity_matrix
     
     def get_model_info(self):
         """Print model summary."""
@@ -244,7 +244,7 @@ class ViTAnalyzer:
             num_images_per_class (int): Number of images to analyze per class
             
         Returns:
-            tuple: (activations_2d, labels, superordinates, similarity_matrix)
+            tuple: (activations_2d, labels, superordinates, dissimilarity_matrix)
         """
         activations = []
         labels = []
@@ -290,10 +290,10 @@ class ViTAnalyzer:
         pca = PCA(n_components=2)
         activations_2d = pca.fit_transform(activations)
         
-        # Compute similarity matrix
-        similarity_matrix = compute_pairwise_similarity(activations)
+        # Compute dissimilarity matrix
+        dissimilarity_matrix = compute_pairwise_dissimilarity(activations)
         
-        return activations_2d, labels, superordinates, similarity_matrix
+        return activations_2d, labels, superordinates, dissimilarity_matrix
     
     def get_model_info(self):
         """Print model information."""
