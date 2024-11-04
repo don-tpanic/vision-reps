@@ -21,6 +21,7 @@ class CNNAnalyzer:
     A class for analyzing CNN model activations and representations.
     
     Attributes:
+        dissimilarity_metric: The dissimilarity metric to use for computing pairwise dissimilarity
         model_name (str): Name of the CNN model ('vgg16', 'resnet50', 'inception_v3')
         model: The loaded Keras model
         preprocess_input: The appropriate preprocessing function for the model
@@ -33,7 +34,7 @@ class CNNAnalyzer:
         'inception_v3': (InceptionV3, inception_preprocess, (299, 299))
     }
     
-    def __init__(self, model_name='vgg16', weights='imagenet', include_top=True):
+    def __init__(self, dissimilarity_metric, model_name='vgg16', weights='imagenet', include_top=True):
         """
         Initialize the CNN analyzer.
         
@@ -44,10 +45,11 @@ class CNNAnalyzer:
         """
         if model_name not in self.SUPPORTED_MODELS:
             raise ValueError(f"Model {model_name} not supported. Choose from {list(self.SUPPORTED_MODELS.keys())}")
-            
+        
         self.model_name = model_name
         model_class, self.preprocess_input, self.input_shape = self.SUPPORTED_MODELS[model_name]
         self.model = model_class(weights=weights, include_top=include_top)
+        self.dissimilarity_metric = dissimilarity_metric
         
     def get_layer_output_model(self, layer_name):
         """Get a model that outputs the specified layer's activations."""
@@ -147,7 +149,7 @@ class CNNAnalyzer:
         activations_2d = pca.fit_transform(activations)
 
         # Compute dissimilarity matrix
-        dissimilarity_matrix = compute_pairwise_dissimilarity(activations)
+        dissimilarity_matrix = compute_pairwise_dissimilarity(activations, metric=self.dissimilarity_metric)
         
         return activations_2d, labels, superordinates, dissimilarity_matrix
     
@@ -161,6 +163,7 @@ class ViTAnalyzer:
     A class for analyzing Vision Transformer (ViT) model representations.
     
     Attributes:
+        dissimilarity_metric: The dissimilarity metric to use for computing pairwise dissimilarity
         model_name (str): Name of the ViT model ('vit-base', 'vit-large', 'dino-vit-small', 'dino-vit-base')
         model: The loaded model
         preprocessor: The appropriate image preprocessor for the model
@@ -172,7 +175,7 @@ class ViTAnalyzer:
         'dino-vitb16': ('facebook/dino-vitb16', (224, 224)),         # https://huggingface.co/facebook/dino-vitb16
     }
     
-    def __init__(self, model_name='vit-base-patch16-224', device=None):
+    def __init__(self, dissimilarity_metric, model_name='vit-base-patch16-224', device=None):
         """
         Initialize the ViT analyzer.
         
@@ -182,7 +185,8 @@ class ViTAnalyzer:
         """
         if model_name not in self.SUPPORTED_MODELS:
             raise ValueError(f"Model {model_name} not supported. Choose from {list(self.SUPPORTED_MODELS.keys())}")
-            
+
+        self.dissimilarity_metric = dissimilarity_metric
         self.model_name = model_name
         self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -291,7 +295,8 @@ class ViTAnalyzer:
         activations_2d = pca.fit_transform(activations)
         
         # Compute dissimilarity matrix
-        dissimilarity_matrix = compute_pairwise_dissimilarity(activations)
+        dissimilarity_matrix = compute_pairwise_dissimilarity(
+            activations, metric=self.dissimilarity_metric)
         
         return activations_2d, labels, superordinates, dissimilarity_matrix
     
