@@ -1,6 +1,5 @@
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy as np
@@ -664,10 +663,10 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
 def main():
     if not "vit" in base_model_name:
         # Initialize the CNN analyzer
-        analyzer = CNNAnalyzer(model_name=base_model_name)
+        analyzer = CNNAnalyzer(model_name=base_model_name, dissimilarity_metric=dissimilarity_metric)
     else:
         # Initialize the ViT analyzer
-        analyzer = ViTAnalyzer(model_name=base_model_name)
+        analyzer = ViTAnalyzer(model_name=base_model_name, dissimilarity_metric=dissimilarity_metric)
     analyzer.get_model_info()
     
     wnid_to_description = load_class_info()
@@ -690,13 +689,14 @@ def main():
 
 if __name__ == "__main__":
     # Configuration
+    os.environ["CUDA_VISIBLE_DEVICES"] = '2'
     base_model_name = 'vit-base-patch16-224'  # vit-base-patch16-224 | dino-vitb16 | vgg16
     actv_output_dir = f"{base_model_name}_actv"
-    dissimilarity_metric = 'cosine'
+    dissimilarity_metric = 'euclidean'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
     unique_superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
     layers_to_analyze = ["6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
-
+    # layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
     main()
