@@ -9,6 +9,7 @@ import matplotlib
 import seaborn as sns
 import scipy
 
+import stats
 from models import CNNAnalyzer, ViTAnalyzer
 
 def load_class_info():
@@ -325,29 +326,24 @@ def analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, 
         'f_statistic': f_stat,
         'p_value': p_value
     }
-    
-    # 2. Post-hoc t-tests for within-superordinate comparisons (with Bonferroni correction)
-    within_ttests = {}
-    n_comparisons = (n_superordinates * (n_superordinates - 1)) // 2
-    for i, sup1 in enumerate(unique_superordinates):
-        for sup2 in unique_superordinates[i+1:]:
-            t_stat, p_val = scipy.stats.ttest_ind(
-                within_dissimilarities_distributions[sup1],
-                within_dissimilarities_distributions[sup2]
-            )
-            within_ttests[(sup1, sup2)] = {
-                't_statistic': t_stat,
-                'p_value': p_val * n_comparisons  # Bonferroni correction
-            }
-    statistical_tests['within_ttests'] = within_ttests
-    
-    # 3. Compare within vs between dissimilarities
+        
+    # 2. Compare within vs between dissimilarities
+    # Record,
+    # 1) mean difference
+    # 2) bootstrapped confidence intervals
+    # 3) t-test results (t-statistic and p-value)
     all_within = np.concatenate(list(within_dissimilarities_distributions.values()))
     all_between = np.concatenate(list(between_dissimilarities_distributions.values()))
-    t_stat, p_val = scipy.stats.ttest_ind(all_within, all_between)
+    stats_results = stats.compare_distributions_mean_diff_and_bootstrap_ci(
+        all_within, all_between, n_bootstrap=100, ci_level=0.95, random_state=42)
+    t_stat, p_value = scipy.stats.ttest_ind(all_within, all_between)
+
     statistical_tests['within_vs_between'] = {
+        'mean_diff': stats_results['mean_diff'],
+        'ci_lower': stats_results['ci_lower'],
+        'ci_upper': stats_results['ci_upper'],
         't_statistic': t_stat,
-        'p_value': p_val
+        'p_value': p_value
     }
     
     return {
@@ -426,13 +422,6 @@ def plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilari
     plt.title(f'Superordinate dissimilarity Matrix - {layer_name}')
     plt.xticks(rotation=45)
     plt.yticks(rotation=0)
-    
-    # Add within vs between test result
-    test_result = analysis_results['statistical_tests']['within_vs_between']
-    plt.text(0.02, -0.15,
-            f'Within vs Between t-test: t={test_result["t_statistic"]:.2f}, p={test_result["p_value"]:.3e}',
-            transform=plt.gca().transAxes)
-    
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f'{base_model_name}_{dissimilarity_metric}_between_dissimilarities_{layer_name}.png'))
     plt.close()
@@ -450,8 +439,9 @@ def plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilari
                             showmeans=True, showextrema=True)
     
     # Customize violin plots
-    for pc in violins['bodies']:
-        pc.set_facecolor('#D43F3A')
+    colors = ['#D43F3A', '#5CB85C']
+    for i, pc in enumerate(violins['bodies']):
+        pc.set_facecolor(colors[i])
         pc.set_alpha(0.7)
     
     plt.title(f'Distribution of Within vs Between dissimilarities - {layer_name}')
@@ -461,6 +451,7 @@ def plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilari
     # Add test statistics
     test_result = analysis_results['statistical_tests']['within_vs_between']
     plt.text(0.02, 0.98,
+            f'Mean Difference: {test_result["mean_diff"]:.3f}\nCI: [{test_result["ci_lower"]:.3f}, {test_result["ci_upper"]:.3f}]\n' \
             f't-test: t={test_result["t_statistic"]:.2f}, p={test_result["p_value"]:.3e}',
             transform=plt.gca().transAxes,
             verticalalignment='top',
@@ -523,23 +514,18 @@ def analyze_animacy_dissimilarities(dissimilarity_matrix, superordinates, labels
     # Perform statistical tests
     statistical_tests = {}
     
-    # 1. Compare animal vs non-animal within-category dissimilarities
-    t_stat, p_val = scipy.stats.ttest_ind(
-        within_dissimilarities_distributions["animal"],
-        within_dissimilarities_distributions["nonimal"]
-    )
-    statistical_tests['within_comparison'] = {
-        't_statistic': t_stat,
-        'p_value': p_val
-    }
-    
-    # 2. Compare within vs between dissimilarities
+    # 1. Compare within vs between dissimilarities
     all_within = np.concatenate([
         within_dissimilarities_distributions["animal"],
         within_dissimilarities_distributions["nonimal"]
     ])
+    stats_results = stats.compare_distributions_mean_diff_and_bootstrap_ci(
+        all_within, between_dissimilarities_distribution, n_bootstrap=100, ci_level=0.95, random_state=42)
     t_stat, p_val = scipy.stats.ttest_ind(all_within, between_dissimilarities_distribution)
     statistical_tests['within_vs_between'] = {
+        'mean_diff': stats_results['mean_diff'],
+        'ci_lower': stats_results['ci_lower'],
+        'ci_upper': stats_results['ci_upper'],
         't_statistic': t_stat,
         'p_value': p_val
     }
@@ -561,63 +547,32 @@ def plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_met
         layer_name (str): Name of the layer being analyzed
         dissimilarity_metric (str): dissimilarity metric used
         output_dir (str): Directory to save plots
-    """
-    # 1. Plot within-animacy dissimilarities
-    plt.figure(figsize=(10, 6))
-    within_sims = analysis_results['within_dissimilarities']
-    
-    # Bar plot
-    bars = plt.bar(range(len(within_sims)), 
-                  list(within_sims.values()),
-                  tick_label=list(within_sims.keys()))
-    
-    # Add error bars showing standard deviation of distributions
-    errors = [np.std(analysis_results['within_distributions'][category]) 
-             for category in within_sims.keys()]
-    plt.errorbar(range(len(within_sims)), list(within_sims.values()),
-                yerr=errors, fmt='none', color='black', capsize=5)
-    
-    plt.title(f'Within-Animacy Category dissimilarities - {layer_name}')
-    plt.ylabel('Average dissimilarity')
-    
-    # Add significance annotations
-    test_result = analysis_results['statistical_tests']['within_comparison']
-    plt.text(0.02, 0.98, 
-            f't-test: t={test_result["t_statistic"]:.2f}, p={test_result["p_value"]:.3e}',
-            transform=plt.gca().transAxes,
-            verticalalignment='top',
-            bbox=dict(facecolor='white', alpha=0.8))
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 
-                f'{base_model_name}_{dissimilarity_metric}_within_animacy_dissimilarities_{layer_name}.png'))
-    plt.close()
-    
-    # 2. Plot distribution comparison
+    """    
+    # 1. Plot distribution comparison
     plt.figure(figsize=(12, 6))
     
     # Create violin plots for within and between distributions
     all_within_animal = analysis_results['within_distributions']['animal']
-    all_within_nonimal = analysis_results['within_distributions']['nonimal']
     all_between = analysis_results['between_distribution']
     
-    positions = [1, 2, 3]
-    violins = plt.violinplot([all_within_animal, all_within_nonimal, all_between], 
+    positions = [1, 2]
+    violins = plt.violinplot([all_within_animal, all_between], 
                            positions, points=100, showmeans=True, showextrema=True)
     
     # Customize violin plots
-    colors = ['#D43F3A', '#5CB85C', '#5BC0DE']
+    colors = ['#D43F3A', '#5CB85C']
     for i, pc in enumerate(violins['bodies']):
         pc.set_facecolor(colors[i])
         pc.set_alpha(0.7)
     
     plt.title(f'Distribution of Within and Between Animacy dissimilarities - {layer_name}')
-    plt.xticks(positions, ['Within\nAnimal', 'Within\nNon-animal', 'Between\nCategories'])
+    plt.xticks(positions, ['Within\nAnimal', 'Between\nCategories'])
     plt.ylabel('dissimilarity')
     
     # Add test statistics
     test_result = analysis_results['statistical_tests']['within_vs_between']
     plt.text(0.02, 0.98,
+            f'Mean Difference: {test_result["mean_diff"]:.4f}\nCI: [{test_result["ci_lower"]:.4f}, {test_result["ci_upper"]:.4f}]\n' \
             f'Within vs Between t-test: t={test_result["t_statistic"]:.2f}, p={test_result["p_value"]:.3e}',
             transform=plt.gca().transAxes,
             verticalalignment='top',
@@ -646,11 +601,7 @@ def plot_all_visualizations(all_wnids, layer_results, output_dir):
         # 2. Plot dissimilarity matrix
         plot_dissimilarity_matrix(dissimilarity_matrix, labels, superordinates, 
                              layer_name, base_model_name, dissimilarity_metric, output_dir)
-        
-        # # 3. Plot activation distribution
-        # raw_activations = get_raw_activations(all_wnids, layer_name)
-        # plot_activation_distribution(raw_activations, layer_name, output_dir)
-        
+                
         # 4. Plot superordinate dissimilarity analysis
         analysis_results = analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, labels)
         plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir)
@@ -689,14 +640,14 @@ def main():
 
 if __name__ == "__main__":
     # Configuration
-    os.environ["CUDA_VISIBLE_DEVICES"] = '2'
-    base_model_name = 'vit-base-patch16-224'  # vit-base-patch16-224 | dino-vitb16 | vgg16
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    base_model_name = 'vgg16'  # vit-base-patch16-224 | dino-vitb16 | vgg16
     actv_output_dir = f"{base_model_name}_actv"
     dissimilarity_metric = 'euclidean'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
     unique_superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
-    layers_to_analyze = ["6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
-    # layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
+    # layers_to_analyze = ["6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
+    layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
     main()
