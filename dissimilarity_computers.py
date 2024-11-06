@@ -13,7 +13,10 @@ def compute_pairwise_dissimilarity(activations, metric='cosine'):
         np.ndarray: 2D array of pairwise dissimilarities
     """
     if metric == 'cosine':
-        return 1.0 - cosine_similarity(activations)
+        res = 1.0 - cosine_similarity(activations)
+        # cast to python float64 as json complains about numpy float32
+        # float64 is also consistent with `pdist` and `squareform`
+        return res.astype('float64')
     else:
         distances = pdist(activations, metric=metric)
         return squareform(distances)
