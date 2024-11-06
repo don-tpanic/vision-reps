@@ -628,14 +628,14 @@ def main():
 
 if __name__ == "__main__":
     # Configuration
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
-    base_model_name = 'vgg16'  # vit-base-patch16-224 | dino-vitb16 | vgg16
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+    base_model_name = 'vit-base-patch16-224'  # vit-base-patch16-224 | dino-vitb16 | vgg16
     actv_output_dir = f"{base_model_name}_actv"
-    dissimilarity_metric = 'cosine'
+    dissimilarity_metric = 'euclidean'
 
     num_classes_per_superordinate = 5
     image_dir = '/fast-data20/datasets/ILSVRC/2012/clsloc/val_white'
     unique_superordinates = ["cloth", "land_trans", "ave", "felidae", "fish", "kitchen", "canidae"]
-    # layers_to_analyze = ["3", "6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
-    layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
+    layers_to_analyze = ["3", "6", "9", "12"] # ViT 13 hidden outputs final layer untrained.
+    # layers_to_analyze = ["block4_pool", "block5_pool", "fc2"]
     main()
