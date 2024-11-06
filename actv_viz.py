@@ -100,45 +100,6 @@ def plot_dissimilarity_matrix(dissimilarity_matrix, labels, superordinates, laye
         dpi=300)
     plt.close()
 
-def plot_activation_distribution(raw_activations, layer_name, output_dir):
-    """
-    Plot activation distribution analysis including zero vs non-zero statistics.
-    """
-    plt.figure(figsize=(10, 6))
-    
-    # Calculate statistics
-    total_activations = raw_activations.size
-    zero_activations = np.sum(raw_activations == 0)
-    nonzero_activations = total_activations - zero_activations
-    
-    zero_percentage = (zero_activations / total_activations) * 100
-    nonzero_percentage = (nonzero_activations / total_activations) * 100
-    
-    # Create bar plot
-    bars = plt.bar(['Zero Activations', 'Non-zero Activations'], 
-                [zero_percentage, nonzero_percentage],
-                color=['#ff9999', '#66b3ff'])
-    
-    # Add percentage labels
-    add_percentage_labels(bars)
-    
-    # Add title and labels
-    plt.title(f'Activation Distribution Analysis - {layer_name}', fontsize=14, pad=20)
-    plt.ylabel('Percentage of Total Activations (%)', fontsize=12)
-    
-    # Add statistical summary
-    add_statistical_summary(plt, total_activations, zero_activations, 
-                          nonzero_activations, raw_activations)
-    
-    # Customize the plot
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    plt.ylim(0, max(zero_percentage, nonzero_percentage) * 1.15)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f'{base_model_name}_activation_distribution_{layer_name}.png'),
-                dpi=300, bbox_inches='tight')
-    plt.close()
-
 def analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, labels):
     """
     Analyze dissimilarities within and between superordinates.
@@ -169,7 +130,7 @@ def analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, 
         # Extract upper triangle (excluding diagonal)
         upper_tri = within_sim[np.triu_indices_from(within_sim, k=1)]
         within_dissimilarities[sup] = np.mean(upper_tri)
-        within_dissimilarities_distributions[sup] = upper_tri
+        within_dissimilarities_distributions[sup] = list(upper_tri)
     
     # Calculate between-superordinate dissimilarities
     between_dissimilarities = {}
@@ -179,8 +140,8 @@ def analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, 
             mask1 = superordinate_masks[sup1]
             mask2 = superordinate_masks[sup2]
             between_sim = dissimilarity_matrix[np.ix_(mask1, mask2)]
-            between_dissimilarities[(sup1, sup2)] = np.mean(between_sim)
-            between_dissimilarities_distributions[(sup1, sup2)] = between_sim.flatten()
+            between_dissimilarities[f"{sup1},{sup2}"] = np.mean(between_sim)
+            between_dissimilarities_distributions[f"{sup1},{sup2}"] = list(between_sim.flatten())
     
     # Perform statistical tests
     statistical_tests = {}
@@ -267,7 +228,8 @@ def plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilari
     between_matrix = np.zeros((n_superordinates, n_superordinates))
     
     # Fill the matrix
-    for (sup1, sup2), sim in analysis_results['between_dissimilarities'].items():
+    for str_sup1_sup2, sim in analysis_results['between_dissimilarities'].items():
+        sup1, sup2 = str_sup1_sup2.split(',')
         i = unique_superordinates.index(sup1)
         j = unique_superordinates.index(sup2)
         between_matrix[i, j] = sim
@@ -368,14 +330,14 @@ def analyze_animacy_dissimilarities(dissimilarity_matrix, superordinates, labels
         # Extract upper triangle (excluding diagonal)
         upper_tri = within_sim[np.triu_indices_from(within_sim, k=1)]
         within_dissimilarities[category] = np.mean(upper_tri)
-        within_dissimilarities_distributions[category] = upper_tri
+        within_dissimilarities_distributions[category] = list(upper_tri)
     
     # Calculate between-animacy dissimilarities
     mask_animal = animacy_masks["animal"]
     mask_nonimal = animacy_masks["nonimal"]
     between_sim = dissimilarity_matrix[np.ix_(mask_animal, mask_nonimal)]
     between_dissimilarities = np.mean(between_sim)
-    between_dissimilarities_distribution = between_sim.flatten()
+    between_dissimilarities_distribution = list(between_sim.flatten())
     
     # Perform statistical tests
     statistical_tests = {}
@@ -449,61 +411,184 @@ def plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_met
                 f'{base_model_name}_{dissimilarity_metric}_animacy_dissimilarity_distributions_{layer_name}.png'))
     plt.close()
 
-def plot_all_visualizations(all_wnids, layer_results, output_dir):
+def save_layer_results(results, layer_name, output_dir):
     """
-    Main plotting function that calls individual plotting functions for each visualization.
+    Save all analysis results for a layer.
     
     Args:
-        layer_results (dict): Dictionary with layer names as keys and tuples of 
-                          (activations_2d, labels, superordinates, dissimilarity_matrix) as values
-        output_dir (str): Directory to save the output figures
+        results (dict): Results from analyze_layer_results
+        layer_name (str): Name of the layer
+        output_dir (str): Directory to save results
+    """
+    layer_dir = os.path.join(output_dir, layer_name)
+    os.makedirs(layer_dir, exist_ok=True)
+    
+    # Save numpy arrays
+    np.save(os.path.join(layer_dir, 'activations_2d.npy'), results['activations_2d'])
+    np.save(os.path.join(layer_dir, 'dissimilarity_matrix.npy'), results['dissimilarity_matrix'])
+    
+    # Save lists and analysis results as JSON
+    with open(os.path.join(layer_dir, 'metadata.json'), 'w') as f:
+        json_results = {
+            'labels': results['labels'],
+            'superordinates': results['superordinates'],
+            'superordinate_analysis': results['superordinate_analysis'],
+            'animacy_analysis': results['animacy_analysis']
+        }
+        json.dump(json_results, f, indent=2)
+
+def load_layer_results(layer_name, results_dir):
+    """
+    Load all analysis results for a layer.
+    
+    Args:
+        layer_name (str): Name of the layer
+        results_dir (str): Directory containing results
+        
+    Returns:
+        dict: Complete analysis results
+    """
+    layer_dir = os.path.join(results_dir, layer_name)
+    
+    # Load numpy arrays
+    activations_2d = np.load(os.path.join(layer_dir, 'activations_2d.npy'))
+    dissimilarity_matrix = np.load(os.path.join(layer_dir, 'dissimilarity_matrix.npy'))
+    
+    # Load JSON data
+    with open(os.path.join(layer_dir, 'metadata.json'), 'r') as f:
+        json_results = json.load(f)
+    
+    return {
+        'activations_2d': activations_2d,
+        'dissimilarity_matrix': dissimilarity_matrix,
+        'labels': json_results['labels'],
+        'superordinates': json_results['superordinates'],
+        'superordinate_analysis': json_results['superordinate_analysis'],
+        'animacy_analysis': json_results['animacy_analysis']
+    }
+
+def analyze_layer_results(activations_2d, labels, superordinates, dissimilarity_matrix):
+    """
+    Analyze layer results and compute all metrics at once.
+    
+    Args:
+        activations_2d (np.ndarray): 2D projection of activations
+        labels (list): Class labels
+        superordinates (list): Superordinate categories
+        dissimilarity_matrix (np.ndarray): Matrix of pairwise dissimilarities
+        
+    Returns:
+        dict: Complete analysis results
+    """
+    # Analyze superordinate dissimilarities
+    superordinate_results = analyze_superordinate_dissimilarities(
+        dissimilarity_matrix, superordinates, labels)
+    
+    # Analyze animacy dissimilarities
+    animacy_results = analyze_animacy_dissimilarities(
+        dissimilarity_matrix, superordinates, labels)
+    
+    return {
+        'activations_2d': activations_2d,
+        'labels': labels,
+        'superordinates': superordinates,
+        'dissimilarity_matrix': dissimilarity_matrix,
+        'superordinate_analysis': superordinate_results,
+        'animacy_analysis': animacy_results
+    }
+
+def plot_all_visualizations(all_wnids, results_dir, output_dir):
+    """
+    Plot all visualizations using saved results.
+    
+    Args:
+        all_wnids (set): Set of all WNIDs
+        results_dir (str): Directory containing analysis results
+        output_dir (str): Directory to save plots
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    for layer_name, (activations_2d, labels, superordinates, dissimilarity_matrix) in layer_results.items():
-        # 1. Plot 2D activations
-        plot_2d_activations(activations_2d, superordinates, layer_name, output_dir)
+    for layer_name in layers_to_analyze:
+        print(f"Plotting layer: {layer_name}")
+        # Load results
+        layer_results = load_layer_results(layer_name, results_dir)
         
-        # 2. Plot dissimilarity matrix
-        plot_dissimilarity_matrix(dissimilarity_matrix, labels, superordinates, 
-                             layer_name, base_model_name, dissimilarity_metric, output_dir)
-                
-        # 4. Plot superordinate dissimilarity analysis
-        analysis_results = analyze_superordinate_dissimilarities(dissimilarity_matrix, superordinates, labels)
-        plot_superordinate_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir)
-
-        # 5. Plot animacy dissimilarity analysis
-        analysis_results = analyze_animacy_dissimilarities(dissimilarity_matrix, superordinates, labels)
-        plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_metric, output_dir)
-
+        # Plot 2D activations
+        plot_2d_activations(
+            layer_results['activations_2d'],
+            layer_results['superordinates'],
+            layer_name,
+            output_dir
+        )
+        
+        # Plot dissimilarity matrix
+        plot_dissimilarity_matrix(
+            layer_results['dissimilarity_matrix'],
+            layer_results['labels'],
+            layer_results['superordinates'],
+            layer_name,
+            base_model_name,
+            dissimilarity_metric,
+            output_dir
+        )
+        
+        # Plot superordinate dissimilarity analysis
+        plot_superordinate_dissimilarities(
+            layer_results['superordinate_analysis'],
+            layer_name,
+            dissimilarity_metric,
+            output_dir
+        )
+        
+        # Plot animacy dissimilarity analysis
+        plot_animacy_dissimilarities(
+            layer_results['animacy_analysis'],
+            layer_name,
+            dissimilarity_metric,
+            output_dir
+        )
 
 def main():
     if not "vit" in base_model_name:
-        # Initialize the CNN analyzer
         analyzer = CNNAnalyzer(model_name=base_model_name, dissimilarity_metric=dissimilarity_metric)
     else:
-        # Initialize the ViT analyzer
         analyzer = ViTAnalyzer(model_name=base_model_name, dissimilarity_metric=dissimilarity_metric)
     analyzer.get_model_info()
     
     wnid_to_description = load_class_info()
     superordinate_dict, all_wnids = load_superordinate_info()
-
-    layer_results = {}
+    
+    # Analysis phase
+    results_dir = os.path.join('results', base_model_name)
+    os.makedirs(results_dir, exist_ok=True)
+    
     for layer_name in layers_to_analyze:
         print(f"Analyzing layer: {layer_name}")
-        layer_results[layer_name] = analyzer.analyze_layer(
-            layer_name, 
-            image_dir,
-            actv_output_dir,
-            wnid_to_description, 
-            superordinate_dict, 
-            all_wnids
-        )
+        layer_dir = os.path.join(results_dir, layer_name)
+        if not os.path.exists(layer_dir):
+            # Get basic layer-wise activations and dissimilarity matrices
+            # which we do further analysis on.
+            activations_2d, labels, superordinates, dissimilarity_matrix = analyzer.analyze_layer(
+                layer_name, 
+                image_dir,
+                actv_output_dir,
+                wnid_to_description, 
+                superordinate_dict, 
+                all_wnids
+            )
+        
+            # Compute all analysis results
+            layer_results = analyze_layer_results(
+                activations_2d, labels, superordinates, dissimilarity_matrix)
+            
+            # Save results
+            save_layer_results(layer_results, layer_name, results_dir)
+        else:
+            print(f"Results already exist for layer: {layer_name}, skip to plotting.")
     
-    # Plot all visualizations
-    plot_all_visualizations(all_wnids, layer_results, 'figs')
-    
+    # Plotting phase
+    plot_all_visualizations(all_wnids, results_dir, "figs")
+
 if __name__ == "__main__":
     # Configuration
     os.environ["CUDA_VISIBLE_DEVICES"] = '0'
