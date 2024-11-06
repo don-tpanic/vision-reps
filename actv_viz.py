@@ -411,6 +411,35 @@ def plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_met
                 f'{base_model_name}_{dissimilarity_metric}_animacy_dissimilarity_distributions_{layer_name}.png'))
     plt.close()
 
+def plot_animacy_mean_diff_over_layers(layers_to_analyze, results_dir):
+    """
+    Plot how animacy mean_diff between within and between animal-nonimal
+    changes over layers. fill_between with ci.
+
+    Args:
+        layers_to_analyze (list): List of layer names
+        results_dir (str): Directory containing analysis results
+    """
+    layer_mean_diff_and_ci = []
+    for layer_name in layers_to_analyze:
+        layer_results = load_layer_results(layer_name, results_dir)
+        animacy_results = layer_results['animacy_analysis']
+        test_result = animacy_results['statistical_tests']['within_vs_between']
+        layer_mean_diff_and_ci.append((layer_name, test_result['mean_diff'], test_result['ci_lower'], test_result['ci_upper']))
+
+    layer_names, mean_diffs, ci_lowers, ci_uppers = zip(*layer_mean_diff_and_ci)
+    plt.figure(figsize=(12, 6))
+    plt.plot(layer_names, mean_diffs, marker='o', label='Mean Difference')
+    plt.fill_between(layer_names, ci_lowers, ci_uppers, alpha=0.3, label='95% CI')
+    plt.xlabel('Layer')
+    plt.ylabel('Mean Difference')
+    plt.title('Animacy Mean Difference between Within and Between Dissimilarities')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join('figs', f'{base_model_name}_animacy_mean_diff_over_layers.png'))
+    plt.close()
+
+
 def save_layer_results(results, layer_name, output_dir):
     """
     Save all analysis results for a layer.
@@ -547,6 +576,11 @@ def plot_all_visualizations(all_wnids, results_dir, output_dir):
             dissimilarity_metric,
             output_dir
         )
+
+    # Plot how animacy mean_diff between within and between animal-nonimal
+    # changes over layers. fill_between with ci.
+    plot_animacy_mean_diff_over_layers(layers_to_analyze, results_dir)
+
 
 def main():
     if not "vit" in base_model_name:
