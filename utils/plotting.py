@@ -88,25 +88,3 @@ def add_percentage_labels(bars):
         plt.text(bar.get_x() + bar.get_width()/2., height,
                 f'{height:.1f}%',
                 ha='center', va='bottom', fontsize=12)
-
-def add_statistical_summary(plt, total_activations, zero_activations, nonzero_activations, raw_activations):
-    """
-    Add statistical summary to the plot.
-    """
-    summary_stats = {
-        'Total Activations': f"{total_activations:,}",
-        'Zero Activations': f"{zero_activations:,}",
-        'Non-zero Activations': f"{nonzero_activations:,}",
-        'Mean (non-zero)': f"{np.mean(raw_activations[raw_activations != 0]):.3f}",
-        'Std (non-zero)': f"{np.std(raw_activations[raw_activations != 0]):.3f}"
-    }
-    
-    stats_text = '\n'.join([f'{k}: {v}' for k, v in summary_stats.items()])
-    plt.text(0.98, 0.98, stats_text,
-            transform=plt.gca().transAxes,
-            verticalalignment='top',
-            horizontalalignment='right',
-            fontsize=10,
-            fontfamily='monospace',
-            bbox=dict(facecolor='white', alpha=0.8,
-                    edgecolor='gray', boxstyle='round,pad=0.5'))
