@@ -411,18 +411,19 @@ def plot_animacy_dissimilarities(analysis_results, layer_name, dissimilarity_met
                 f'{base_model_name}_{dissimilarity_metric}_animacy_dissimilarity_distributions_{layer_name}.png'))
     plt.close()
 
-def plot_animacy_mean_diff_over_layers(layers_to_analyze, results_dir):
+def plot_animacy_mean_diff_over_layers(layers_to_analyze, dissimilarity_metric, results_dir):
     """
     Plot how animacy mean_diff between within and between animal-nonimal
     changes over layers. fill_between with ci.
 
     Args:
         layers_to_analyze (list): List of layer names
+        dissimilarity_metric (str): Dissimilarity metric used
         results_dir (str): Directory containing analysis results
     """
     layer_mean_diff_and_ci = []
     for layer_name in layers_to_analyze:
-        layer_results = load_layer_results(layer_name, results_dir)
+        layer_results = load_layer_results(layer_name, dissimilarity_metric, results_dir)
         animacy_results = layer_results['animacy_analysis']
         test_result = animacy_results['statistical_tests']['within_vs_between']
         layer_mean_diff_and_ci.append((layer_name, test_result['mean_diff'], test_result['ci_lower'], test_result['ci_upper']))
@@ -432,24 +433,25 @@ def plot_animacy_mean_diff_over_layers(layers_to_analyze, results_dir):
     plt.plot(layer_names, mean_diffs, marker='o', label='Mean Difference')
     plt.fill_between(layer_names, ci_lowers, ci_uppers, alpha=0.3, label='95% CI')
     plt.xlabel('Layer')
-    plt.ylabel('Mean Difference')
+    plt.ylabel(f'Mean Difference ({dissimilarity_metric})')
     plt.title('Animacy Mean Difference between Within and Between Dissimilarities')
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join('figs', f'{base_model_name}_animacy_mean_diff_over_layers.png'))
+    plt.savefig(os.path.join('figs', f'{base_model_name}_{dissimilarity_metric}_animacy_mean_diff_over_layers.png'))
     plt.close()
 
 
-def save_layer_results(results, layer_name, output_dir):
+def save_layer_results(results, dissimilarity_metric, layer_name, output_dir):
     """
     Save all analysis results for a layer.
     
     Args:
         results (dict): Results from analyze_layer_results
+        dissimilarity_metric (str): Dissimilarity metric used
         layer_name (str): Name of the layer
         output_dir (str): Directory to save results
     """
-    layer_dir = os.path.join(output_dir, layer_name)
+    layer_dir = os.path.join(output_dir, dissimilarity_metric, layer_name)
     os.makedirs(layer_dir, exist_ok=True)
     
     # Save numpy arrays
@@ -466,18 +468,19 @@ def save_layer_results(results, layer_name, output_dir):
         }
         json.dump(json_results, f, indent=2)
 
-def load_layer_results(layer_name, results_dir):
+def load_layer_results(layer_name, dissimilarity_metric, results_dir):
     """
     Load all analysis results for a layer.
     
     Args:
         layer_name (str): Name of the layer
+        dissimilarity_metric (str): Dissimilarity metric used
         results_dir (str): Directory containing results
         
     Returns:
         dict: Complete analysis results
     """
-    layer_dir = os.path.join(results_dir, layer_name)
+    layer_dir = os.path.join(results_dir, dissimilarity_metric, layer_name)
     
     # Load numpy arrays
     activations_2d = np.load(os.path.join(layer_dir, 'activations_2d.npy'))
@@ -540,7 +543,7 @@ def plot_all_visualizations(all_wnids, results_dir, output_dir):
     for layer_name in layers_to_analyze:
         print(f"Plotting layer: {layer_name}")
         # Load results
-        layer_results = load_layer_results(layer_name, results_dir)
+        layer_results = load_layer_results(layer_name, dissimilarity_metric, results_dir)
         
         # Plot 2D activations
         plot_2d_activations(
@@ -579,7 +582,7 @@ def plot_all_visualizations(all_wnids, results_dir, output_dir):
 
     # Plot how animacy mean_diff between within and between animal-nonimal
     # changes over layers. fill_between with ci.
-    plot_animacy_mean_diff_over_layers(layers_to_analyze, results_dir)
+    plot_animacy_mean_diff_over_layers(layers_to_analyze, dissimilarity_metric, results_dir)
 
 
 def main():
@@ -598,7 +601,7 @@ def main():
     
     for layer_name in layers_to_analyze:
         print(f"Analyzing layer: {layer_name}")
-        layer_dir = os.path.join(results_dir, layer_name)
+        layer_dir = os.path.join(results_dir, dissimilarity_metric, layer_name)
         if not os.path.exists(layer_dir):
             # Get basic layer-wise activations and dissimilarity matrices
             # which we do further analysis on.
@@ -616,7 +619,7 @@ def main():
                 activations_2d, labels, superordinates, dissimilarity_matrix)
             
             # Save results
-            save_layer_results(layer_results, layer_name, results_dir)
+            save_layer_results(layer_results, dissimilarity_metric, layer_name, results_dir)
         else:
             print(f"Results already exist for layer: {layer_name}, skip to plotting.")
     
